@@ -22,6 +22,7 @@ import java.nio.channels.FileChannel
 import java.util.concurrent.Executors
 import android.Manifest
 import android.content.pm.PackageManager
+import android.util.Log
 import android.widget.Toast
 import java.nio.ByteOrder
 import androidx.core.graphics.scale
@@ -34,11 +35,11 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
         private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
-        private const val MODEL_NAME = "pothole0216.tflite"
+        private const val MODEL_NAME = "pothole0232.tflite"
         private const val INPUT_SIZE = 640
         private const val NUM_DETECTIONS = 5
         private const val LABEL = "Pothole"
-        private const val THRESHOLD = 0.5f
+        private const val THRESHOLD = 0.25f
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,6 +54,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         interpreter = Interpreter(loadModelFile(MODEL_NAME))
+        val inputShape = interpreter.getInputTensor(0).shape()
+        val inputType = interpreter.getInputTensor(0).dataType()
+        Log.d("MODEL_CHECK", "Input shape: ${inputShape.contentToString()} Type: $inputType")
+
+// ตรวจสอบ Output
+        val outputShape = interpreter.getOutputTensor(0).shape()
+        val outputType = interpreter.getOutputTensor(0).dataType()
+        Log.d("MODEL_CHECK", "Output shape: ${outputShape.contentToString()} Type: $outputType")
     }
 
     private fun loadModelFile(filename: String): ByteBuffer {
@@ -69,7 +78,7 @@ class MainActivity : AppCompatActivity() {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
             val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(findViewById<PreviewView>(R.id.viewFinder).surfaceProvider)
+                it.surfaceProvider = findViewById<PreviewView>(R.id.viewFinder).surfaceProvider
             }
             val imageAnalyzer = ImageAnalysis.Builder()
                 .setTargetResolution(Size(INPUT_SIZE, INPUT_SIZE))
@@ -99,26 +108,32 @@ class MainActivity : AppCompatActivity() {
         // YOLOv8 TFLite output: [1, 5, 8400]
         // output[0][0] = x_center, output[0][1] = y_center, output[0][2] = width, output[0][3] = height, output[0][4] = confidence
         val confThreshold = THRESHOLD // Adjust as needed
-
-        for (i in 0 until 8400) {
+        var found = false
+        for (i in output[0].indices) {
             val conf = output[0][4][i]
+            Log.d("model_detect_output", conf.toString())
             if (conf > confThreshold) {
                 val x = output[0][0][i]
                 val y = output[0][1][i]
                 val w = output[0][2][i]
                 val h = output[0][3][i]
-
+               found = true
                 // Convert normalized xywh to pixel box corners
                 val left = (x - w / 2) * scaleX
                 val top = (y - h / 2) * scaleY
                 val right = (x + w / 2) * scaleX
                 val bottom = (y + h / 2) * scaleY
-                results.add(OverlayView.Result(left, top, right, bottom, conf, "Pothole"))
+                results.add(OverlayView.Result(left, top, right, bottom, conf, LABEL))
             }
         }
 
         runOnUiThread {
             overlayView.setResults(results)
+            if(found){
+                Toast.makeText(this, "พบหลุมบนถนน", Toast.LENGTH_LONG).show()
+            }else{
+                Toast.makeText(this, "ไม่พบหลุมบนถนน", Toast.LENGTH_LONG).show()
+            }
         }
         imageProxy.close()
     }
