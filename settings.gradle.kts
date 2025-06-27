@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "pothole"
+rootProject.name = "demo pothole2"
 include(":app")
