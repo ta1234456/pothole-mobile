@@ -32,12 +32,12 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
         private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
-        private const val MODEL_NAME = "15k/best_float32.tflite"
+        private const val MODEL_NAME = "15k/best_float16.tflite"
         private const val INPUT_SIZE = 640
         private const val NUM_BOXES = 8400
         private const val LABEL = "Pothole"
         private const val THRESHOLD = 0.2f
-        private const val NMS_IOU_THRESHOLD = 0.5f
+        private const val NMS_IOU_THRESHOLD = 0.2f
     }
 
     private var lastDetectionState: Boolean? = null
@@ -107,7 +107,22 @@ class MainActivity : AppCompatActivity() {
             val results = mutableListOf<OverlayView.Result>()
             val scaleX = bitmap.width
             val scaleY = bitmap.height
-
+            val overlayWidth = overlayView.width.toFloat()
+            val overlayHeight = overlayView.height.toFloat()
+            val scale: Float
+            val dx: Float
+            val dy: Float
+            if (overlayWidth / overlayHeight > 1f) {
+                // Wider than tall: crop width
+                scale = overlayHeight / INPUT_SIZE
+                dx = (overlayWidth - overlayHeight) / 2f
+                dy = 0f
+            } else {
+                // Taller than wide: crop height
+                scale = overlayWidth / INPUT_SIZE
+                dx = 0f
+                dy = (overlayHeight - overlayWidth) / 2f
+            }
             for (i in 0 until NUM_BOXES) {
                 val conf = output[0][4][i]
                 if (conf > THRESHOLD) {
@@ -115,10 +130,10 @@ class MainActivity : AppCompatActivity() {
                     val y = output[0][1][i]
                     val w = output[0][2][i]
                     val h = output[0][3][i]
-                    val left = (x - w / 2) * scaleX
-                    val top = (y - h / 2) * scaleY
-                    val right = (x + w / 2) * scaleX
-                    val bottom = (y + h / 2) * scaleY
+                    val left = (x - w / 2) * INPUT_SIZE * scale + dx
+                    val top = (y - h / 2) * INPUT_SIZE * scale + dy
+                    val right = (x + w / 2) * INPUT_SIZE * scale + dx
+                    val bottom = (y + h / 2) * INPUT_SIZE * scale + dy
                     results.add(OverlayView.Result(left, top, right, bottom, conf, LABEL))
                 }
             }
